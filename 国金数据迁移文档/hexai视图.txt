@@ -1,0 +1,126 @@
+1.ecm_doc 对应 t_ai_fms_batch视图
+
+SELECT
+	ecm_doc.OBJECT_ID AS BATCH_ID,
+	CONCAT(ecm_doc.`NAME`,'|',ecm_doc.CLABEL) AS BATCH_NAME,
+	ecm_doc.CREATOR AS CRT_USER,
+	ecm_doc.CREATE_TIME AS CREATE_TIME,
+	ecm_doc.UPDATE_TIME AS END_TIME,
+	ecm_doc.OCRSTATUS AS BATCH_STATUS,
+	ecm_doc.OCRFLAG AS BATCH_TYPE 
+FROM
+	ecm_doc
+	
+	
+2.ecm_file 对应 t_ai_fms_file
+
+SELECT
+	ecm_file.`NAME` AS FILE_NAME,
+	ecm_file.DOC_ID AS BATCH_ID,
+	ecm_folder.OBJECT_ID AS FOLDER_ID,
+	ecm_folder.OBJECT_ID AS FILE_ID,
+	ecm_file.CREATOR AS CRT_USER,
+	ecm_file.CREATE_TIME AS CREATE_TIME,
+	ecm_file.CONTENT_URL AS SRC_FILENAME,
+	( CASE WHEN CONTAINS ( ecm_file.CONTENT_URL, 'src' ) THEN 'src' ELSE 'scan' END ) AS FILE_PATHNAME,
+	'00002007' AS BATCH_TYPE 
+FROM
+	ecm_file,
+	ecm_folder 
+
+3.ecm_folder 对应 t_ai_fms_folder
+
+SELECT
+	ecm_folder.OBJECT_ID AS FOLDER_ID,
+	ecm_folder.PARENT_ID AS PARENT_ID,
+	ecm_store.ID AS STORE_ID,
+	ecm_folder.`NAME` AS FOLDER_NAME,
+	ecm_folder.ALIASES AS ALIASES,
+	ecm_folder.OBJECT_PATH AS OBJECT_PATH,
+	ecm_folder.SEQ_NO AS SEQ_NO,
+	ecm_folder.DELETED AS DELETED,
+	ecm_folder.CREATOR AS CRT_USER,
+	ecm_folder.CREATE_TIME AS CREATE_TIME 
+FROM
+	ecm_folder,
+	ecm_store 
+	
+	
+4.ecm_store 对应 t_ai_fms_store
+
+SELECT
+	ecm_store.ID AS ID,
+	ecm_store.`NAME` AS `NAME`,
+	ecm_store.STORE_TYPE AS STORE_TYPE,
+	ecm_store.STORE_URL AS STORE_URL 
+FROM
+	ecm_store
+
+
+5.t_ai_dds_docdiff_filter 对应 t_ai_dds_docdiff_filter
+
+SELECT
+	t_ai_dds_docdiff_filter.TEXT_NO AS TEXT_NO,
+	t_ai_dds_docdiff_filter.CORP_ID AS TENANT_ID,
+	t_ai_dds_docdiff_filter.TEXT_ONE AS TEXT_ONE,
+	t_ai_dds_docdiff_filter.TEXT_TWO AS TEXT_TWO,
+	t_ai_dds_docdiff_filter.CREATE_TIME AS CREATE_TIME 
+FROM
+	t_ai_dds_docdiff_filter
+	
+	
+6.t_contract_factor对应 t_ai_dds_factor
+
+SELECT
+	t_contract_factor.CF_NO AS CF_NO,
+	t_contract_factor.CF_NAME AS CF_NAME,
+	t_contract_factor.CF_KEYWORD AS CF_KEYWORD,
+	t_contract_factor.CF_REMARK AS CF_REMARK,
+	t_contract_factor.CREATOR AS CRT_USER,
+	t_contract_factor.CORP_ID AS TENANT_ID 
+FROM
+	t_contract_factor
+	
+
+7.t_contract_template 对应 t_ai_dds_template
+
+SELECT
+	t_contract_template.CT_NO AS CT_NO,
+	t_contract_template.CT_NAME AS CT_NAME,
+	t_contract_template.CT_DESC AS CT_DESC,
+	t_contract_template.CREATOR AS CRT_USER,
+	t_contract_template.CORP_ID AS TENANT_ID 
+FROM
+	t_contract_template
+	
+	
+8.t_contract_template_factor 对应 t_ai_dds_template_factor
+
+SELECT
+	t_contract_template_factror.CT_NO AS CT_NO,
+	t_contract_template_factror.CF_NO AS CF_NO,
+	t_contract_template_factror.CTF_KEYWORD AS CTF_KEYWORD,
+	t_contract_template_factror.CTF_REMARK AS CTF_REMARK 
+FROM
+	t_contract_template_factror
+	
+
+9.t_ai_dds_docdiff_log 对应 t_ai_dds_statistics
+
+SELECT
+	t_ai_dds_docdiff_log.OBJECT_ID AS BATCH_ID,
+	t_ai_dds_docdiff_log.PROCESSTIME AS PROCESS_TIME,
+	t_ai_dds_docdiff_log.DOC_PAGES AS DOC_PAGES,
+	t_ai_dds_docdiff_log.CORP_ID AS TENANT_ID,
+	t_ai_dds_docdiff_log.CREATOR AS CRT_USER,
+	t_ai_dds_docdiff_log.CREATE_TIME AS CREATE_TIME 
+FROM
+	t_ai_dds_docdiff_log
+	
+
+10.jarvis新表 t_ai_dds_batch_extend_info
+
+SELECT
+	ecm_doc.OBJECT_ID AS BATCH_ID 
+FROM
+	ecm_doc 
