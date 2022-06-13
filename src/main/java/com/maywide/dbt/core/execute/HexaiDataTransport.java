@@ -3,6 +3,7 @@ package com.maywide.dbt.core.execute;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.maywide.dbt.config.datasource.dynamic.Constants;
 import com.maywide.dbt.config.datasource.dynamic.DbContextHolder;
@@ -32,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @Component
 public class HexaiDataTransport {
 
-    @Value("target.mysql.datasource.names")
+    @Value("${target.mysql.datasource.names}")
     private String targetNames;
 
     private static final Logger log = LoggerFactory.getLogger(HexaiDataTransport.class);
@@ -55,16 +56,15 @@ public class HexaiDataTransport {
     @Autowired
     private TableTransport tableTransport;
 
-    @Value("file.rootDir:/hexdata/exdoc")
+    @Value("${file.rootDir:/hexdata/exdoc}")
     private String fileRootDir;
 
-    @Value("userId:JARVIS")
+    @Value("${userId:JARVIS}")
     private String userId;
 
-    @Value("orgId:19")
+    @Value("${orgId:19}")
     private String orgId;
 
-    @Value("tenantId")
     private String tenantId;
 
 
@@ -123,7 +123,8 @@ public class HexaiDataTransport {
             try {
                 //1.初始化批次目录
                 DbContextHolder.setDBType(targetNames);
-                fesuploadFolder = springJdbcTemplate.queryForObject(folderSelectSql, FmsFolder.class, "fesupload");
+                Map<String, Object> folder = springJdbcTemplate.queryForMap(folderSelectSql, "fesupload");
+                fesuploadFolder = JSON.parseObject(JSON.toJSONString(folder), FmsFolder.class);
                 if (Objects.isNull(fesuploadFolder)) {
                     fesuploadFolder = new FmsFolder();
                     fesuploadFolder.setFolderId(IdUtil.nanoId(6));
@@ -149,7 +150,8 @@ public class HexaiDataTransport {
                     values[9] = fesuploadFolder.getStoreId();
                     int row = springJdbcTemplate.update(folderInsertSql, values);
                 }
-                ddsuploadFolder = springJdbcTemplate.queryForObject(folderSelectSql, FmsFolder.class, "ddsupload");
+                folder = springJdbcTemplate.queryForMap(folderSelectSql, "ddsupload");
+                ddsuploadFolder = JSON.parseObject(JSON.toJSONString(folder), FmsFolder.class);
                 if (Objects.isNull(ddsuploadFolder)) {
                     ddsuploadFolder = new FmsFolder();
                     ddsuploadFolder.setFolderId(IdUtil.nanoId(6));
@@ -175,7 +177,8 @@ public class HexaiDataTransport {
                     values[9] = ddsuploadFolder.getStoreId();
                     int row = springJdbcTemplate.update(folderInsertSql, values);
                 }
-                desuploadFolder = springJdbcTemplate.queryForObject(folderSelectSql, FmsFolder.class, "desupload");
+                folder = springJdbcTemplate.queryForMap(folderSelectSql, "desupload");
+                desuploadFolder = JSON.parseObject(JSON.toJSONString(folder), FmsFolder.class);
                 if (Objects.isNull(desuploadFolder)) {
                     desuploadFolder = new FmsFolder();
                     desuploadFolder.setFolderId(IdUtil.nanoId(6));
@@ -265,7 +268,8 @@ public class HexaiDataTransport {
                 //log.info("线程 {"+Thread.currentThread().getName()+"},"+ JSON.toJSONString(DataTransport.dataCopyPoolExecutor));
                 //1.根据源库和findSql  查询数据
                 DbContextHolder.setDBType(Constants.DEFAULT_DATA_SOURCE_NAME);
-                List<EcmDoc> ecmDocList = springJdbcTemplate.queryForList(sql, EcmDoc.class);
+                List<Map<String, Object>> ecmDocMapList = springJdbcTemplate.queryForList(sql);
+                List<EcmDoc> ecmDocList = JSON.parseArray(JSON.toJSONString(ecmDocMapList), EcmDoc.class);
                 //2.根据数据，插入目标库
                 if (CollectionUtil.isNotEmpty(ecmDocList)) {
                     List<FmsBatch> batchList = new ArrayList<>();
@@ -314,7 +318,8 @@ public class HexaiDataTransport {
                     ecmFileSelectSql += " ) ";
                     List<FmsFile> fileList = new ArrayList<>();
                     List<Object[]> fileValueList = new ArrayList<>();
-                    List<EcmFile> ecmFileList = springJdbcTemplate.queryForList(ecmFileSelectSql, EcmFile.class);
+                    List<Map<String, Object>> ecmFileMapList = springJdbcTemplate.queryForList(ecmFileSelectSql);
+                    List<EcmFile> ecmFileList = JSON.parseArray(JSON.toJSONString(ecmFileMapList), EcmFile.class);
                     for (EcmFile ecmFile : ecmFileList) {
                         FmsFile file = new FmsFile();
                         file.setFileId(ecmFile.getObjectId());
@@ -349,10 +354,10 @@ public class HexaiDataTransport {
                         fileList.add(file);
                     }
                     if (CollectionUtil.isNotEmpty(batchValueList)){
-                        jdbcUtilServices.batchInsert(targetNames, Constants.DEFAULT_DATA_SOURCE_NAME, batchInsertSql,batchValueList);
+                        jdbcUtilServices.batchInsert(targetNames, "FMS_BATCH", batchInsertSql,batchValueList);
                     }
                     if (CollectionUtil.isNotEmpty(fileValueList)){
-                        jdbcUtilServices.batchInsert(targetNames, Constants.DEFAULT_DATA_SOURCE_NAME, fileInsertSql,fileValueList);
+                        jdbcUtilServices.batchInsert(targetNames, "FMS_FILE", fileInsertSql,fileValueList);
                     }
                 }
             }
