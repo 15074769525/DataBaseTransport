@@ -34,20 +34,44 @@ public class EcmDoc {
     //"00002007", "合同比较"
     //"00002008", "合同提取"
     //"00002009", "文件提取"
-    public String mappingBatchType(String ocrflag){
+    public String mappingBatchType(){
         String batchType="";
-        switch (ocrflag){
-            case "7":
+        switch (this.ocrflag){
+            case 7:
                 batchType="00002007";
                 break;
-            case "13":
+            case 13:
                 batchType="00002008";
                 break;
-            case "15":
+            case 15:
                 batchType="00002009";
                 break;
             default:
         }
         return batchType;
+    }
+
+    //"0", "开始"
+    //"100", "识别完成"
+    //"-20", "失败"
+    //"-10140", "服务内部错误"
+    public String mappingBatchStatus(){
+        String batchStatus="";
+        switch (this.ocrstatus){
+            case "1":
+                batchStatus="0";
+                break;
+            case "10":
+                batchStatus="100";
+                break;
+            case "20":
+                batchStatus="-20";
+                break;
+            case "30":
+                batchStatus="-10140";
+                break;
+            default:
+        }
+        return batchStatus;
     }
 }

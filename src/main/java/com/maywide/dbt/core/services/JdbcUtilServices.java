@@ -248,6 +248,31 @@ public class JdbcUtilServices {
         return springJdbcTemplate.queryForObject(SqlUtil.countSql(sql), Integer.class);
     }
 
-
+    @Transactional
+    public int[] batchInsert(String inDataSource,String targetTable , String sql,List<Object[]> valueList){
+        if(null == valueList || valueList.isEmpty()){
+            log.info("准备插入数到+"+inDataSource+",table ="+targetTable+",数量为空,不执行插入");
+            return null;
+        }
+        log.info("准备插入数到+"+inDataSource+",table ="+targetTable+",数量="+valueList.size());
+        long t1 = System.currentTimeMillis();
+        DbContextHolder.setDBType(inDataSource);
+        int[] result =  springJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+            @Override
+            public void setValues(PreparedStatement preparedStatement, int i) throws SQLException {
+                Object[] values = valueList.get(i);
+                for (int j = 0; j < values.length; j++) {
+                    preparedStatement.setObject(j+1,values[j]);
+                }
+            }
+            @Override
+            public int getBatchSize() {
+                return valueList.size();
+            }
+        });
+        long t2 = System.currentTimeMillis();
+        log.info("批量插入- [成功] - "+inDataSource+",table ="+targetTable+",数量="+valueList.size()+"耗时:["+(t2-t1)+"ms]");
+        return result;
+    }
 
 }
