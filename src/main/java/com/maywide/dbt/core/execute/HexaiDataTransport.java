@@ -99,6 +99,7 @@ public class HexaiDataTransport {
         private FmsFolder desuploadFolder;
 
         {
+            System.out.println(2);
             //追加过滤条件
             if (CollectionUtil.isNotEmpty(ocrFlags)) {
                 String condition = " where ocrflag in (";
@@ -114,6 +115,7 @@ public class HexaiDataTransport {
         }
 
         public BatchDataWork() {
+            System.out.println(1);
         }
 
         @Override
