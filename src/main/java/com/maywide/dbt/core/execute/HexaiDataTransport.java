@@ -256,6 +256,14 @@ public class HexaiDataTransport {
                     "FILE_PATHNAME,SRC_FILENAME,FILE_STATUS,CRT_USER,CREATE_TIME,TENANT_ID,ORG_ID,FILE_PATH_URL) " +
                     "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)";
 
+            private String logInsertSql = " INSERT INTO T_AI_DDS_STATISTICS (BATCH_ID,PROCESS_TIME,DOC_PAGES,CREATE_TIME," +
+                    "END_TIME,START_OCR_TIME,OCR_TYPE,CRT_USER,TENANT_ID,ORG_ID) " +
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)";
+
+            private String extendInfoInsertSql = " INSERT INTO T_AI_DDS_BATCH_EXTEND_INFO (BATCH_ID,OCR_STAMP,REMOVE_WATERMARK_SRC," +
+                    "REMOVE_WATERMARK_SCAN,REMOVE_STAMP) " +
+                    "VALUES(?,?,?,?,?)";
+
             private CopyBatchDataInWork(String sql, Integer page, Integer pageSize) {
                 this.sql = sql;
                 this.page = page;
