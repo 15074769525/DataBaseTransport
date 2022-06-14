@@ -260,23 +260,24 @@ public class JdbcUtilServices {
         log.info("准备插入数到" + tableName + ",数量=" + valueList.size());
         long t1 = System.currentTimeMillis();
         DbContextHolder.setDBType(targetDataSource);
-        int[] result = springJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
-            @Override
-            public void setValues(PreparedStatement preparedStatement, int i) throws SQLException {
-                Object[] values = valueList.get(i);
-                for (int j = 0; j < values.length; j++) {
-                    preparedStatement.setObject(j + 1, values[j]);
-                }
-            }
-
-            @Override
-            public int getBatchSize() {
-                return valueList.size();
-            }
-        });
+        int[] ints = springJdbcTemplate.batchUpdate(sql, valueList);
+//        int[] result = springJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {
+//            @Override
+//            public void setValues(PreparedStatement preparedStatement, int i) throws SQLException {
+//                Object[] values = valueList.get(i);
+//                for (int j = 0; j < values.length; j++) {
+//                    preparedStatement.setObject(j + 1, values[j]);
+//                }
+//            }
+//
+//            @Override
+//            public int getBatchSize() {
+//                return valueList.size();
+//            }
+//        });
         long t2 = System.currentTimeMillis();
         log.info("批量插入- [成功],数量=" + valueList.size() + "耗时:[" + (t2 - t1) + "ms]");
-        return result;
+        return ints;
     }
 
 }

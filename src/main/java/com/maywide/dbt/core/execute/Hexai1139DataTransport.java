@@ -5,6 +5,7 @@ import cn.hutool.core.date.DatePattern;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.IdUtil;
+import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.maywide.dbt.config.datasource.dynamic.Constants;
@@ -415,7 +416,7 @@ public class Hexai1139DataTransport {
                             extendInfo.setCtCode(hexaiDocextractInfo.getCtCode());
                             extendInfo.setExtractwords(hexaiDocextractInfo.getExtractwords());
                         }
-                        extendInfo.setAgainOcrTime(batch.getCreateTime());
+                        extendInfo.setStartOcrTime(batch.getCreateTime());
                         extendInfo.setOcrStamp(String.valueOf(false));
                         extendInfo.setRemoveWatermarkScan(String.valueOf(false));
                         extendInfo.setRemoveWatermarkSrc(String.valueOf(false));
@@ -612,7 +613,7 @@ public class Hexai1139DataTransport {
                     List<Factor> factorList = new ArrayList<>();
                     List<Object[]> templateValueList = new ArrayList<>();
                     List<Object[]> factorValueList = new ArrayList<>();
-                    hexaiContractTemplateFactrors = hexaiContractTemplateFactrors.stream().filter(ctf -> !"defaultId".equals(ctf.getCtNo())).collect(Collectors.toList());
+                    hexaiContractTemplateFactrors = hexaiContractTemplateFactrors.stream().filter(ctf -> StrUtil.isNotBlank(ctf.getCtNo())&& !"defaultId".equals(ctf.getCtNo())).collect(Collectors.toList());
                     for (HexaiContractTemplateFactror hexaiCTF : hexaiContractTemplateFactrors) {
                         long count = templateList.stream().filter(t -> t.getCtNo().equals(hexaiCTF.getCtNo())).count();
                         if (count <= 0) {
@@ -690,7 +691,9 @@ public class Hexai1139DataTransport {
                             }
                         } catch (Exception e) {
                         }
-                        jdbcUtilServices.batchInsert(targetNames, "T_AI_DDS_FACTOR", sql, factorValueList);
+                        for (Object[] values : factorValueList) {
+                            springJdbcTemplate.update(sql,values);
+                        }
                         Date now = new Date();
                         springJdbcTemplate.update(updateNextIdSql,now);
                         springJdbcTemplate.update(insertNextIdSql, now);
