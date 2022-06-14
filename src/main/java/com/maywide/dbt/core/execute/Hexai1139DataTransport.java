@@ -1,6 +1,7 @@
 package com.maywide.dbt.core.execute;
 
 import cn.hutool.core.collection.CollectionUtil;
+import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
@@ -112,6 +113,12 @@ public class Hexai1139DataTransport {
 
         @Override
         public void run() {
+            //判断根目录是否存在
+            boolean rootDirExist = FileUtil.exist(fileRootDir);
+            if (!rootDirExist){
+                log.error("{} 目录不存在，取消批次数据迁移",rootDirExist);
+                return;
+            }
             try {
                 //1.初始化批次目录
                 DbContextHolder.setDBType(targetNames);
