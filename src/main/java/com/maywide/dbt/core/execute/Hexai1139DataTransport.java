@@ -1,6 +1,7 @@
 package com.maywide.dbt.core.execute;
 
 import cn.hutool.core.collection.CollectionUtil;
+import cn.hutool.core.date.DatePattern;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.IdUtil;
@@ -376,7 +377,6 @@ public class Hexai1139DataTransport {
                         file.setTenantId(tenantId);
                         file.setOrgId(orgId);
                         file.setCreateTime(hexaiFile.getCreateTime());
-                        //服务器文件数据迁移
                         String hexaiPathUrl = hexaiFile.getFilePathUrl();
                         String suffix="";
                         if (OcrTypeEnum.DDS.code().equals(file.getBatchType())) {
@@ -387,12 +387,6 @@ public class Hexai1139DataTransport {
                             suffix = hexaiPathUrl.substring(hexaiPathUrl.indexOf(FolderTypeEnum.FES.folderName()));
                         }
                         file.setFilePathUrl(store.getStoreUrl()+ File.separator+suffix);
-                        File copyLocalPathUrl = Paths.get(fileRootDir, suffix).toFile();
-                        if (copyLocalPathUrl.exists()){
-                            File targetPathUrl = Paths.get(file.getFilePathUrl()).toFile();
-                            FileUtil.move(copyLocalPathUrl,targetPathUrl,true);
-                            log.info("文件迁移记录：{}  -->  {}",copyLocalPathUrl.getAbsolutePath(),targetPathUrl.getAbsolutePath());
-                        }
                         Object[] values = new Object[13];
                         values[0] = file.getFileId();
                         values[1] = file.getFolderId();
@@ -498,6 +492,33 @@ public class Hexai1139DataTransport {
                     }
                     if (CollectionUtil.isNotEmpty(statisticsValueList)) {
                         jdbcUtilServices.batchInsert(targetNames, "T_AI_DDS_STATISTICS", statisticsInsertSql, statisticsValueList);
+                    }
+
+                    //服务器文件数据迁移
+                    log.info("第{}页批次服务器文件迁移",page);
+                    for (FmsBatch batch : batchList) {
+                        String batchSuffixPath="";
+                        String exportSuffixPath="";
+                        if (OcrTypeEnum.DDS.code().equals(batch.getBatchType())) {
+                            batchSuffixPath=FolderTypeEnum.DDS.folderName()+File.separator+ DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime())+File.separator+batch.getBatchId();
+                            exportSuffixPath=FolderTypeEnum.DDS.exportFolder()+File.separator+ DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime())+File.separator+batch.getBatchId();
+                        } else if (OcrTypeEnum.DES.code().equals(batch.getBatchType())) {
+                            batchSuffixPath=FolderTypeEnum.DES.folderName()+File.separator+ DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime())+File.separator+batch.getBatchId();
+                            exportSuffixPath=FolderTypeEnum.DES.exportFolder()+File.separator+ DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime())+File.separator+batch.getBatchId();
+                        } else if (OcrTypeEnum.FES.code().equals(batch.getBatchType())) {
+                            batchSuffixPath=FolderTypeEnum.FES.folderName()+File.separator+ DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime())+File.separator+batch.getBatchId();
+                            exportSuffixPath=FolderTypeEnum.FES.exportFolder()+File.separator+ DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime())+File.separator+batch.getBatchId();
+                        }
+                        File copyBatchPathUrl = Paths.get(fileRootDir, batchSuffixPath).toFile();
+                        if (copyBatchPathUrl.exists()){
+                            File targetBatchPathUrl = Paths.get(store.getStoreUrl(),batchSuffixPath).toFile();
+                            FileUtil.move(copyBatchPathUrl,targetBatchPathUrl,true);
+                            File copyExportPathUrl = Paths.get(fileRootDir, exportSuffixPath).toFile();
+                            File targetExportPathUrl = Paths.get(store.getStoreUrl(), exportSuffixPath).toFile();
+                            FileUtil.move(copyExportPathUrl,targetExportPathUrl,true);
+                            log.info("upload文件迁移记录：{}  -->  {}",copyBatchPathUrl.getAbsolutePath(),targetBatchPathUrl.getAbsolutePath());
+                            log.info("export文件迁移记录：{}  -->  {}",copyExportPathUrl.getAbsolutePath(),targetExportPathUrl.getAbsolutePath());
+                        }
                     }
                 }
             }
