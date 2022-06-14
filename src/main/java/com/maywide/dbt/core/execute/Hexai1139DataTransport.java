@@ -73,12 +73,8 @@ public class Hexai1139DataTransport {
 
 
     public void startCopyData() throws InterruptedException {
-        Thread contractTemplate = new Thread(new ContractTemplateDataWork());
-        contractTemplate.start();
-        contractTemplate.join();
-        Thread batchThread = new Thread(new BatchDataWork());
-        batchThread.start();
-        batchThread.join();
+        new Thread(new ContractTemplateDataWork()).start();
+        new Thread(new BatchDataWork()).start();
     }
 
     //处理批次数据迁移
@@ -693,9 +689,13 @@ public class Hexai1139DataTransport {
                             }
                         } catch (Exception e) {
                         }
+                        long t1 = System.currentTimeMillis();
+                        log.info("准备插入数到T_AI_DDS_FACTOR,数量=" + factorValueList.size());
                         for (Object[] values : factorValueList) {
                             springJdbcTemplate.update(sql,values);
                         }
+                        long t2 = System.currentTimeMillis();
+                        log.info("批量插入- [成功],数量=" + factorValueList.size() + "耗时:[" + (t2 - t1) + "ms]");
                         Date now = new Date();
                         springJdbcTemplate.update(updateNextIdSql,now);
                         springJdbcTemplate.update(insertNextIdSql, now);
