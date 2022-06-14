@@ -74,7 +74,7 @@ public class Hexai1139DataTransport {
 
     public void startCopyData() {
         successMap = new ConcurrentHashMap<>();
-        new Thread(new BatchDataWork()).start();
+//        new Thread(new BatchDataWork()).start();
         new Thread(new ContractTemplateDataWork()).start();
     }
 
@@ -589,6 +589,9 @@ public class Hexai1139DataTransport {
                     "CF_REMARK, CF_POSITION, CF_RANGE, CF_RULE, CF_COLOR, CRT_USER, TENANT_ID,ORG_ID, CREATE_TIME, UPDATE_TIME ) " +
                     " values((SELECT * FROM (SELECT DECODE(MAX(CF_NO),null,1,MAX(CF_NO)+1) FROM T_AI_DDS_FACTOR) temp),?,?,?,?,?,?,?,?,?,?,?,?,?) ";
 
+            private String updateNextIdSql = "UPDATE GF_NEXT_ID SET NEXT_ID= (SELECT MAX(CF_NO)+1 FROM T_AI_DDS_FACTOR), LAST_TIME= ? WHERE SEQ_TYPE = 'DDS.FACTOR'";
+            private String insertNextIdSql = "INSERT INTO GF_NEXT_ID(SEQ_TYPE,NEXT_ID,LAST_TIME) SELECT 'DDS.FACTOR', (SELECT MAX(CF_NO)+1 FROM T_AI_DDS_FACTOR), ? FROM dual WHERE NOT EXISTS (SELECT 1 FROM GF_NEXT_ID WHERE SEQ_TYPE = 'DDS.FACTOR')";
+
             private CopyTemplateDataInWork(String sql, Integer page, Integer pageSize) {
                 this.sql = sql;
                 this.page = page;
@@ -639,7 +642,7 @@ public class Hexai1139DataTransport {
                         }
                         Factor factor = new Factor();
                         factor.setCtNo(hexaiCTF.getCtNo());
-                        factor.setCfName(hexaiCTF.getCtNo());
+                        factor.setCfName(hexaiCTF.getCfName());
                         factor.setCfKeyword(hexaiCTF.getCfKeyword());
                         factor.setCfRemark(hexaiCTF.getCfRemark());
                         factor.setCfPosition(hexaiCTF.getCfPosition());
@@ -677,11 +680,11 @@ public class Hexai1139DataTransport {
                         String sql = "";
                         try {
                             String dbProductName = tableTransport.getDbName(targetNames);
-                            switch (dbProductName) {
-                                case SqlUtil.ORACLE:
+                            switch (dbProductName.toLowerCase()) {
+                                case "oracle":
                                     sql = factorInsertOracle;
                                     break;
-                                case SqlUtil.MYSQL:
+                                case "mysql":
                                     sql = factorInsertMysql;
                                     break;
                                 default:
@@ -689,6 +692,9 @@ public class Hexai1139DataTransport {
                         } catch (Exception e) {
                         }
                         jdbcUtilServices.batchInsert(targetNames, "T_AI_DDS_FACTOR", sql, factorValueList);
+                        Date now = new Date();
+                        springJdbcTemplate.update(updateNextIdSql,now);
+                        springJdbcTemplate.update(insertNextIdSql, now);
                     }
                 }
             }
