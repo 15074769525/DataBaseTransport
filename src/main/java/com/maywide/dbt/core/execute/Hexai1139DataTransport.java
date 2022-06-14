@@ -21,11 +21,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.BeanPropertyRowMapper;
+import org.springframework.jdbc.core.ResultSetExtractor;
+import org.springframework.jdbc.support.rowset.SqlRowSet;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -60,7 +65,7 @@ public class Hexai1139DataTransport {
     @Autowired
     private TableTransport tableTransport;
 
-    @Value("${file.rootDir:/hexdata/exdoc}")
+    @Value("${file.rootDir:D:\\exdoc}")
     private String fileRootDir;
 
     @Value("${userId:JARVIS}")
@@ -94,7 +99,7 @@ public class Hexai1139DataTransport {
         private String folderSelectSql = " SELECT * FROM T_AI_FMS_FOLDER WHERE FOLDER_NAME = ? AND DELETED!='1' ";
         private String folderInsertSql = " INSERT INTO T_AI_FMS_FOLDER (FOLDER_ID, FOLDER_NAME," +
                 "OBJECT_PATH,ALIASES, DELETED, CRT_USER,CREATE_TIME,TENANT_ID,ORG_ID,STORE_ID) " +
-                "VALUES (?,?,?,?,?,?,?,?,?) ";
+                "VALUES (?,?,?,?,?,?,?,?,?,?) ";
 
         private FmsFolder fesuploadFolder;
         private FmsFolder ddsuploadFolder;
@@ -125,13 +130,15 @@ public class Hexai1139DataTransport {
                 log.error("{} 目录不存在，取消批次数据迁移", rootDirExist);
                 return;
             }
-            Map<String, Object> storeMap = springJdbcTemplate.queryForMap(storeSelectSql);
-            store = JSON.parseObject(JSON.toJSONString(storeMap), FmsStore.class);
             try {
                 //1.初始化批次目录
                 DbContextHolder.setDBType(targetNames);
-                Map<String, Object> folder = springJdbcTemplate.queryForMap(folderSelectSql, FolderTypeEnum.FES.folderName());
-                fesuploadFolder = JSON.parseObject(JSON.toJSONString(folder), FmsFolder.class);
+                Map<String, Object> storeMap = springJdbcTemplate.queryForMap(storeSelectSql);
+                store = JSON.parseObject(JSON.toJSONString(storeMap), FmsStore.class);
+                List<Map<String, Object>> folderList = springJdbcTemplate.queryForList(folderSelectSql, FolderTypeEnum.FES.folderName());
+                if (CollectionUtil.isNotEmpty(folderList)){
+                    fesuploadFolder = JSON.parseObject(JSON.toJSONString(folderList.get(0)), FmsFolder.class);
+                }
                 if (Objects.isNull(fesuploadFolder)) {
                     fesuploadFolder = new FmsFolder();
                     fesuploadFolder.setFolderId(IdUtil.nanoId(6));
@@ -157,8 +164,10 @@ public class Hexai1139DataTransport {
                     values[9] = fesuploadFolder.getStoreId();
                     int row = springJdbcTemplate.update(folderInsertSql, values);
                 }
-                folder = springJdbcTemplate.queryForMap(folderSelectSql, FolderTypeEnum.DDS.folderName());
-                ddsuploadFolder = JSON.parseObject(JSON.toJSONString(folder), FmsFolder.class);
+                folderList = springJdbcTemplate.queryForList(folderSelectSql, FolderTypeEnum.DDS.folderName());
+                if (CollectionUtil.isNotEmpty(folderList)){
+                    ddsuploadFolder = JSON.parseObject(JSON.toJSONString(folderList.get(0)), FmsFolder.class);
+                }
                 if (Objects.isNull(ddsuploadFolder)) {
                     ddsuploadFolder = new FmsFolder();
                     ddsuploadFolder.setFolderId(IdUtil.nanoId(6));
@@ -184,8 +193,10 @@ public class Hexai1139DataTransport {
                     values[9] = ddsuploadFolder.getStoreId();
                     int row = springJdbcTemplate.update(folderInsertSql, values);
                 }
-                folder = springJdbcTemplate.queryForMap(folderSelectSql, FolderTypeEnum.DES.folderName());
-                desuploadFolder = JSON.parseObject(JSON.toJSONString(folder), FmsFolder.class);
+                folderList = springJdbcTemplate.queryForList(folderSelectSql, FolderTypeEnum.DES.folderName());
+                if (CollectionUtil.isNotEmpty(folderList)){
+                    desuploadFolder = JSON.parseObject(JSON.toJSONString(folderList.get(0)), FmsFolder.class);
+                }
                 if (Objects.isNull(desuploadFolder)) {
                     desuploadFolder = new FmsFolder();
                     desuploadFolder.setFolderId(IdUtil.nanoId(6));
