@@ -45,7 +45,6 @@ public class Hexai1139DataTransport {
     public static final int WORK_QUE_SIZE = 3000;
     public static final int BATCH_PAGESIZE = 5000;
 
-    public static ConcurrentHashMap<String, JSONObject> successMap = new ConcurrentHashMap<>();
 
     private static final AtomicLong along = new AtomicLong(0);
 
@@ -73,10 +72,13 @@ public class Hexai1139DataTransport {
     private String tenantId;
 
 
-    public void startCopyData() {
-        successMap = new ConcurrentHashMap<>();
-        new Thread(new BatchDataWork()).start();
-        new Thread(new ContractTemplateDataWork()).start();
+    public void startCopyData() throws InterruptedException {
+        Thread contractTemplate = new Thread(new ContractTemplateDataWork());
+        contractTemplate.start();
+        contractTemplate.join();
+        Thread batchThread = new Thread(new BatchDataWork());
+        batchThread.start();
+        batchThread.join();
     }
 
     //处理批次数据迁移
@@ -508,10 +510,10 @@ public class Hexai1139DataTransport {
                         File copyBatchPathUrl = Paths.get(fileRootDir, batchSuffixPath).toFile();
                         if (copyBatchPathUrl.exists()) {
                             File targetBatchPathUrl = Paths.get(store.getStoreUrl(), batchSuffixPath).toFile();
-                            FileUtil.move(copyBatchPathUrl, targetBatchPathUrl, true);
+                            FileUtil.copy(copyBatchPathUrl, targetBatchPathUrl, true);
                             File copyExportPathUrl = Paths.get(fileRootDir, exportSuffixPath).toFile();
                             File targetExportPathUrl = Paths.get(store.getStoreUrl(), exportSuffixPath).toFile();
-                            FileUtil.move(copyExportPathUrl, targetExportPathUrl, true);
+                            FileUtil.copy(copyExportPathUrl, targetExportPathUrl, true);
                             log.info("upload文件迁移记录：{}  -->  {}", copyBatchPathUrl.getAbsolutePath(), targetBatchPathUrl.getAbsolutePath());
                             log.info("export文件迁移记录：{}  -->  {}", copyExportPathUrl.getAbsolutePath(), targetExportPathUrl.getAbsolutePath());
                         }
