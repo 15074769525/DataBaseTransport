@@ -5,7 +5,6 @@ import cn.hutool.core.date.DatePattern;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.IdUtil;
-import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.maywide.dbt.config.datasource.dynamic.Constants;
@@ -22,16 +21,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataAccessException;
-import org.springframework.jdbc.core.BeanPropertyRowMapper;
-import org.springframework.jdbc.core.ResultSetExtractor;
-import org.springframework.jdbc.support.rowset.SqlRowSet;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,6 +32,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 @Component
 public class Hexai1139DataTransport {
@@ -81,6 +75,7 @@ public class Hexai1139DataTransport {
     public void startCopyData() {
         successMap = new ConcurrentHashMap<>();
         new Thread(new BatchDataWork()).start();
+        new Thread(new ContractTemplateDataWork()).start();
     }
 
     //处理批次数据迁移
@@ -131,13 +126,14 @@ public class Hexai1139DataTransport {
                 log.error("{} 目录不存在，取消批次数据迁移", rootDirExist);
                 return;
             }
+            log.info("————————————开始批次数据迁移————————————");
             try {
                 //1.初始化批次目录
                 DbContextHolder.setDBType(targetNames);
                 Map<String, Object> storeMap = springJdbcTemplate.queryForMap(storeSelectSql);
                 store = JSON.parseObject(JSON.toJSONString(storeMap), FmsStore.class);
                 List<Map<String, Object>> folderList = springJdbcTemplate.queryForList(folderSelectSql, FolderTypeEnum.FES.folderName());
-                if (CollectionUtil.isNotEmpty(folderList)){
+                if (CollectionUtil.isNotEmpty(folderList)) {
                     fesuploadFolder = JSON.parseObject(JSON.toJSONString(folderList.get(0)), FmsFolder.class);
                 }
                 if (Objects.isNull(fesuploadFolder)) {
@@ -166,7 +162,7 @@ public class Hexai1139DataTransport {
                     int row = springJdbcTemplate.update(folderInsertSql, values);
                 }
                 folderList = springJdbcTemplate.queryForList(folderSelectSql, FolderTypeEnum.DDS.folderName());
-                if (CollectionUtil.isNotEmpty(folderList)){
+                if (CollectionUtil.isNotEmpty(folderList)) {
                     ddsuploadFolder = JSON.parseObject(JSON.toJSONString(folderList.get(0)), FmsFolder.class);
                 }
                 if (Objects.isNull(ddsuploadFolder)) {
@@ -195,7 +191,7 @@ public class Hexai1139DataTransport {
                     int row = springJdbcTemplate.update(folderInsertSql, values);
                 }
                 folderList = springJdbcTemplate.queryForList(folderSelectSql, FolderTypeEnum.DES.folderName());
-                if (CollectionUtil.isNotEmpty(folderList)){
+                if (CollectionUtil.isNotEmpty(folderList)) {
                     desuploadFolder = JSON.parseObject(JSON.toJSONString(folderList.get(0)), FmsFolder.class);
                 }
                 if (Objects.isNull(desuploadFolder)) {
@@ -226,7 +222,7 @@ public class Hexai1139DataTransport {
                 //2.分页查询
                 DbContextHolder.setDBType(Constants.DEFAULT_DATA_SOURCE_NAME);
                 int count = jdbcUtilServices.count(Constants.DEFAULT_DATA_SOURCE_NAME, hexaiBatchSelectSql);
-                log.info("统计出 hexai系统 需要迁移的数据总数【" + count + "】,即将插入目标数据库");
+                log.info("统计出 hexai系统 需要迁移的批次数据总数【" + count + "】,即将插入目标数据库");
                 int pageSize = Hexai1139DataTransport.BATCH_PAGESIZE;
                 //3.复制数据到指定表（多线程)
                 int totalPageNum = (count + pageSize - 1) / pageSize;
@@ -378,7 +374,7 @@ public class Hexai1139DataTransport {
                         file.setOrgId(orgId);
                         file.setCreateTime(hexaiFile.getCreateTime());
                         String hexaiPathUrl = hexaiFile.getFilePathUrl();
-                        String suffix="";
+                        String suffix = "";
                         if (OcrTypeEnum.DDS.code().equals(file.getBatchType())) {
                             suffix = hexaiPathUrl.substring(hexaiPathUrl.indexOf(FolderTypeEnum.DDS.folderName()));
                         } else if (OcrTypeEnum.DES.code().equals(file.getBatchType())) {
@@ -386,7 +382,7 @@ public class Hexai1139DataTransport {
                         } else if (OcrTypeEnum.FES.code().equals(file.getBatchType())) {
                             suffix = hexaiPathUrl.substring(hexaiPathUrl.indexOf(FolderTypeEnum.FES.folderName()));
                         }
-                        file.setFilePathUrl(store.getStoreUrl()+ File.separator+suffix);
+                        file.setFilePathUrl(store.getStoreUrl() + File.separator + suffix);
                         Object[] values = new Object[13];
                         values[0] = file.getFileId();
                         values[1] = file.getFolderId();
@@ -495,30 +491,204 @@ public class Hexai1139DataTransport {
                     }
 
                     //服务器文件数据迁移
-                    log.info("第{}页批次服务器文件迁移",page);
+                    log.info("第{}页批次服务器文件迁移", page);
                     for (FmsBatch batch : batchList) {
-                        String batchSuffixPath="";
-                        String exportSuffixPath="";
+                        String batchSuffixPath = "";
+                        String exportSuffixPath = "";
                         if (OcrTypeEnum.DDS.code().equals(batch.getBatchType())) {
-                            batchSuffixPath=FolderTypeEnum.DDS.folderName()+File.separator+ DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime())+File.separator+batch.getBatchId();
-                            exportSuffixPath=FolderTypeEnum.DDS.exportFolder()+File.separator+ DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime())+File.separator+batch.getBatchId();
+                            batchSuffixPath = FolderTypeEnum.DDS.folderName() + File.separator + DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime()) + File.separator + batch.getBatchId();
+                            exportSuffixPath = FolderTypeEnum.DDS.exportFolder() + File.separator + DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime()) + File.separator + batch.getBatchId();
                         } else if (OcrTypeEnum.DES.code().equals(batch.getBatchType())) {
-                            batchSuffixPath=FolderTypeEnum.DES.folderName()+File.separator+ DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime())+File.separator+batch.getBatchId();
-                            exportSuffixPath=FolderTypeEnum.DES.exportFolder()+File.separator+ DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime())+File.separator+batch.getBatchId();
+                            batchSuffixPath = FolderTypeEnum.DES.folderName() + File.separator + DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime()) + File.separator + batch.getBatchId();
+                            exportSuffixPath = FolderTypeEnum.DES.exportFolder() + File.separator + DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime()) + File.separator + batch.getBatchId();
                         } else if (OcrTypeEnum.FES.code().equals(batch.getBatchType())) {
-                            batchSuffixPath=FolderTypeEnum.FES.folderName()+File.separator+ DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime())+File.separator+batch.getBatchId();
-                            exportSuffixPath=FolderTypeEnum.FES.exportFolder()+File.separator+ DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime())+File.separator+batch.getBatchId();
+                            batchSuffixPath = FolderTypeEnum.FES.folderName() + File.separator + DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime()) + File.separator + batch.getBatchId();
+                            exportSuffixPath = FolderTypeEnum.FES.exportFolder() + File.separator + DatePattern.PURE_DATE_FORMAT.format(batch.getCreateTime()) + File.separator + batch.getBatchId();
                         }
                         File copyBatchPathUrl = Paths.get(fileRootDir, batchSuffixPath).toFile();
-                        if (copyBatchPathUrl.exists()){
-                            File targetBatchPathUrl = Paths.get(store.getStoreUrl(),batchSuffixPath).toFile();
-                            FileUtil.move(copyBatchPathUrl,targetBatchPathUrl,true);
+                        if (copyBatchPathUrl.exists()) {
+                            File targetBatchPathUrl = Paths.get(store.getStoreUrl(), batchSuffixPath).toFile();
+                            FileUtil.move(copyBatchPathUrl, targetBatchPathUrl, true);
                             File copyExportPathUrl = Paths.get(fileRootDir, exportSuffixPath).toFile();
                             File targetExportPathUrl = Paths.get(store.getStoreUrl(), exportSuffixPath).toFile();
-                            FileUtil.move(copyExportPathUrl,targetExportPathUrl,true);
-                            log.info("upload文件迁移记录：{}  -->  {}",copyBatchPathUrl.getAbsolutePath(),targetBatchPathUrl.getAbsolutePath());
-                            log.info("export文件迁移记录：{}  -->  {}",copyExportPathUrl.getAbsolutePath(),targetExportPathUrl.getAbsolutePath());
+                            FileUtil.move(copyExportPathUrl, targetExportPathUrl, true);
+                            log.info("upload文件迁移记录：{}  -->  {}", copyBatchPathUrl.getAbsolutePath(), targetBatchPathUrl.getAbsolutePath());
+                            log.info("export文件迁移记录：{}  -->  {}", copyExportPathUrl.getAbsolutePath(), targetExportPathUrl.getAbsolutePath());
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    //处理提取模板数据迁移
+    //t_ai_contract_template,t_ai_contract_template_factror,t_ai_contract_factor-->t_ai_dds_template,t_ai_dds_factor
+    private class ContractTemplateDataWork implements Runnable {
+
+        //模板数据查询sql
+        private String hexaiTemplateSelectSql = " SELECT ct.CT_NO, ct.CT_CODE, ct.CT_NAME, ct.CT_DESC, ct.CREATE_TIME, " +
+                "cf.CF_NO, cf.CF_NAME, cf.CF_KEYWORD, cf.CF_REMARK, cf.CF_POSITION, cf.CF_RANGE, cf.CF_RULE, cf.CF_COLOR " +
+                "FROM T_AI_CONTRACT_FACTOR cf  " +
+                "LEFT JOIN T_AI_CONTRACT_TEMPLATE_FACTROR ctf on ctf.CF_NO = cf.CF_NO " +
+                "LEFT JOIN T_AI_CONTRACT_TEMPLATE ct on ct.CT_NO = ctf.CT_NO ";
+
+
+        @Override
+        public void run() {
+            log.info("————————————开始模板数据迁移————————————");
+            try {
+                //分页查询
+                DbContextHolder.setDBType(Constants.DEFAULT_DATA_SOURCE_NAME);
+                int count = jdbcUtilServices.count(Constants.DEFAULT_DATA_SOURCE_NAME, " SELECT * FROM T_AI_CONTRACT_FACTOR ");
+                log.info("统计出 hexai系统 需要迁移的要素数据总数【" + count + "】,即将插入目标数据库");
+                int pageSize = Hexai1139DataTransport.BATCH_PAGESIZE;
+                //3.复制数据到指定表（多线程)
+                int totalPageNum = (count + pageSize - 1) / pageSize;
+                log.info("数据总数【" + count + "】,每页[" + pageSize + "],总共[" + totalPageNum + "]页,执行插入 ");
+                if (count > pageSize) {
+                    int start = 0;
+                    for (int i = 0; i < totalPageNum; i++) {
+                        log.info("第" + (i + 1) + "页");
+                        start = (i) * pageSize;
+                        // end = (i+1)*pageSize;
+                        // mysql 的分页 String sql = sourceSql +" limit " + i * pageSize + "," + 1 * pageSize;
+                        // oracle 的分页
+                        String dbProductName = tableTransport.getDbName(Constants.DEFAULT_DATA_SOURCE_NAME);
+                        String sql = SqlUtil.pageSql(dbProductName, hexaiTemplateSelectSql, start, pageSize);
+                        log.debug("分页 sql : " + sql);
+                        dataCopyPoolExecutor.execute(new CopyTemplateDataInWork(sql, i + 1, pageSize));
+                    }
+                } else {
+                    log.info("第1页");
+                    dataCopyPoolExecutor.execute(new CopyTemplateDataInWork(hexaiTemplateSelectSql, 1, pageSize));
+                }
+            } catch (SQLException e) {
+                e.getErrorCode();
+                log.error("复制数据时出错");
+            }
+
+        }
+
+
+        /***
+         * 具体执行的线程类
+         */
+        private class CopyTemplateDataInWork implements Runnable {
+            private String sql;
+            private Integer page;
+            private Integer pageSize;
+
+            private String templateInsertsql = "insert into T_AI_DDS_TEMPLATE (CT_NO, CT_CODE, CT_NAME, CT_DESC, CRT_USER, " +
+                    " TENANT_ID, ORG_ID, CREATE_TIME,  UPDATE_TIME)  " +
+                    "values(?,?,?,?,?,?,?,?,?)";
+            private String factorInsertMysql = " insert into T_AI_DDS_FACTOR (CF_NO, CT_NO, CF_NAME, CF_KEYWORD, " +
+                    "CF_REMARK, CF_POSITION, CF_RANGE, CF_RULE, CF_COLOR, CRT_USER, TENANT_ID,ORG_ID, CREATE_TIME, UPDATE_TIME ) " +
+                    " values((SELECT * FROM (SELECT IF(MAX(CF_NO),MAX(CF_NO)+1,1) FROM T_AI_DDS_FACTOR) temp),?,?,?,?,?,?,?,?,?,?,?,?,?) ";
+
+            private String factorInsertOracle = " insert into T_AI_DDS_FACTOR (CF_NO, CT_NO, CF_NAME, CF_KEYWORD, " +
+                    "CF_REMARK, CF_POSITION, CF_RANGE, CF_RULE, CF_COLOR, CRT_USER, TENANT_ID,ORG_ID, CREATE_TIME, UPDATE_TIME ) " +
+                    " values((SELECT * FROM (SELECT DECODE(MAX(CF_NO),null,1,MAX(CF_NO)+1) FROM T_AI_DDS_FACTOR) temp),?,?,?,?,?,?,?,?,?,?,?,?,?) ";
+
+            private CopyTemplateDataInWork(String sql, Integer page, Integer pageSize) {
+                this.sql = sql;
+                this.page = page;
+                this.pageSize = pageSize;
+            }
+
+            @Override
+            public void run() {
+
+                //log.info("线程 {"+Thread.currentThread().getName()+"},"+ JSON.toJSONString(DataTransport.dataCopyPoolExecutor));
+                //1.根据源库和findSql  查询数据
+                DbContextHolder.setDBType(Constants.DEFAULT_DATA_SOURCE_NAME);
+                List<Map<String, Object>> hexaiTemplateFactorMapList = springJdbcTemplate.queryForList(sql);
+                List<HexaiContractTemplateFactror> hexaiContractTemplateFactrors = JSON.parseArray(JSON.toJSONString(hexaiTemplateFactorMapList), HexaiContractTemplateFactror.class);
+                //2.根据数据，插入目标库
+                if (CollectionUtil.isNotEmpty(hexaiContractTemplateFactrors)) {
+                    //模板数据迁移
+                    List<Template> templateList = new ArrayList<>();
+                    List<Factor> factorList = new ArrayList<>();
+                    List<Object[]> templateValueList = new ArrayList<>();
+                    List<Object[]> factorValueList = new ArrayList<>();
+                    hexaiContractTemplateFactrors = hexaiContractTemplateFactrors.stream().filter(ctf -> !"defaultId".equals(ctf.getCtNo())).collect(Collectors.toList());
+                    for (HexaiContractTemplateFactror hexaiCTF : hexaiContractTemplateFactrors) {
+                        long count = templateList.stream().filter(t -> t.getCtNo().equals(hexaiCTF.getCtNo())).count();
+                        if (count <= 0) {
+                            Template template = new Template();
+                            template.setCtNo(hexaiCTF.getCtNo());
+                            template.setCtCode(hexaiCTF.getCtCode());
+                            template.setCtName(hexaiCTF.getCtName());
+                            template.setCtDesc(hexaiCTF.getCtDesc());
+                            template.setCrtUser(userId);
+                            template.setTenantId(tenantId);
+                            template.setOrgId(orgId);
+                            template.setCreateTime(hexaiCTF.getCreateTime());
+                            template.setUpdateTime(hexaiCTF.getCreateTime());
+                            Object[] values = new Object[9];
+                            values[0] = template.getCtNo();
+                            values[1] = template.getCtCode();
+                            values[2] = template.getCtName();
+                            values[3] = template.getCtDesc();
+                            values[4] = template.getCrtUser();
+                            values[5] = template.getTenantId();
+                            values[6] = template.getOrgId();
+                            values[7] = template.getCreateTime();
+                            values[8] = template.getUpdateTime();
+                            templateValueList.add(values);
+                            templateList.add(template);
+                        }
+                        Factor factor = new Factor();
+                        factor.setCtNo(hexaiCTF.getCtNo());
+                        factor.setCfName(hexaiCTF.getCtNo());
+                        factor.setCfKeyword(hexaiCTF.getCfKeyword());
+                        factor.setCfRemark(hexaiCTF.getCfRemark());
+                        factor.setCfPosition(hexaiCTF.getCfPosition());
+                        factor.setCfRange(hexaiCTF.getCfRange());
+                        factor.setCfRule(hexaiCTF.getCfRule());
+                        factor.setCfColor(hexaiCTF.getCfColor());
+                        factor.setCrtUser(userId);
+                        factor.setTenantId(tenantId);
+                        factor.setOrgId(orgId);
+                        factor.setCreateTime(hexaiCTF.getCreateTime());
+                        factor.setUpdateTime(hexaiCTF.getCreateTime());
+                        Object[] values = new Object[13];
+                        values[0] = factor.getCtNo();
+                        values[1] = factor.getCfName();
+                        values[2] = factor.getCfKeyword();
+                        values[3] = factor.getCfRemark();
+                        values[4] = factor.getCfPosition();
+                        values[5] = factor.getCfRange();
+                        values[6] = factor.getCfRule();
+                        values[7] = factor.getCfColor();
+                        values[8] = factor.getCrtUser();
+                        values[9] = factor.getTenantId();
+                        values[10] = factor.getOrgId();
+                        values[11] = factor.getCreateTime();
+                        values[12] = factor.getUpdateTime();
+                        factorValueList.add(values);
+                        factorList.add(factor);
+                    }
+
+                    log.info("当前页码 {} ，开始执行插入", page);
+                    if (CollectionUtil.isNotEmpty(templateValueList)) {
+                        jdbcUtilServices.batchInsert(targetNames, "T_AI_DDS_TEMPLATE", templateInsertsql, templateValueList);
+                    }
+                    if (CollectionUtil.isNotEmpty(factorValueList)) {
+                        String sql = "";
+                        try {
+                            String dbProductName = tableTransport.getDbName(targetNames);
+                            switch (dbProductName) {
+                                case SqlUtil.ORACLE:
+                                    sql = factorInsertOracle;
+                                    break;
+                                case SqlUtil.MYSQL:
+                                    sql = factorInsertMysql;
+                                    break;
+                                default:
+                            }
+                        } catch (Exception e) {
+                        }
+                        jdbcUtilServices.batchInsert(targetNames, "T_AI_DDS_FACTOR", sql, factorValueList);
                     }
                 }
             }
