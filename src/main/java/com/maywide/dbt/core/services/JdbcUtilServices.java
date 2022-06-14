@@ -257,7 +257,7 @@ public class JdbcUtilServices {
             log.info("准备插入数到" + tableName + ",数量为空,不执行插入");
             return null;
         }
-        log.info("准备插入数到" + tableName + "+,数量=" + valueList.size());
+        log.info("准备插入数到" + tableName + ",数量=" + valueList.size());
         long t1 = System.currentTimeMillis();
         DbContextHolder.setDBType(targetDataSource);
         int[] result = springJdbcTemplate.batchUpdate(sql, new BatchPreparedStatementSetter() {

@@ -229,7 +229,7 @@ public class Hexai1139DataTransport {
                 int pageSize = Hexai1139DataTransport.BATCH_PAGESIZE;
                 //3.复制数据到指定表（多线程)
                 int totalPageNum = (count + pageSize - 1) / pageSize;
-                log.info("ecm_doc 数据总数【" + count + "】,每页[" + pageSize + "],总共[" + totalPageNum + "]页,执行插入 ");
+                log.info("数据总数【" + count + "】,每页[" + pageSize + "],总共[" + totalPageNum + "]页,执行插入 ");
                 if (count > pageSize) {
                     int start = 0;
                     for (int i = 0; i < totalPageNum; i++) {
