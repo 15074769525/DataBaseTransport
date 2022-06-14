@@ -23,6 +23,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -85,6 +88,8 @@ public class Hexai1139DataTransport {
         //批次数据查询sql
         private String hexaiBatchSelectSql = " SELECT BI.* FROM T_AI_FMS_BATCH BI ";
 
+        //批次数据查询sql
+        private String storeSelectSql = " SELECT S.* FROM T_AI_FMS_STORE S WHERE ID = 0 ";
         //批次目录查询sql
         private String folderSelectSql = " SELECT * FROM T_AI_FMS_FOLDER WHERE FOLDER_NAME = ? AND DELETED!='1' ";
         private String folderInsertSql = " INSERT INTO T_AI_FMS_FOLDER (FOLDER_ID, FOLDER_NAME," +
@@ -94,14 +99,15 @@ public class Hexai1139DataTransport {
         private FmsFolder fesuploadFolder;
         private FmsFolder ddsuploadFolder;
         private FmsFolder desuploadFolder;
+        private FmsStore store;
 
         public BatchDataWork() {
             OcrTypeEnum[] values = OcrTypeEnum.values();
             //追加过滤条件
-            if (ArrayUtil.isNotEmpty(values)){
+            if (ArrayUtil.isNotEmpty(values)) {
                 String condition = " where BATCH_TYPE in (";
                 for (int i = 0; i < values.length; i++) {
-                    condition = condition +" '"+values[i].code()+"' ";
+                    condition = condition + " '" + values[i].code() + "' ";
                     if (i != values.length - 1) {
                         condition = condition + ",";
                     }
@@ -115,10 +121,12 @@ public class Hexai1139DataTransport {
         public void run() {
             //判断根目录是否存在
             boolean rootDirExist = FileUtil.exist(fileRootDir);
-            if (!rootDirExist){
-                log.error("{} 目录不存在，取消批次数据迁移",rootDirExist);
+            if (!rootDirExist) {
+                log.error("{} 目录不存在，取消批次数据迁移", rootDirExist);
                 return;
             }
+            Map<String, Object> storeMap = springJdbcTemplate.queryForMap(storeSelectSql);
+            store = JSON.parseObject(JSON.toJSONString(storeMap), FmsStore.class);
             try {
                 //1.初始化批次目录
                 DbContextHolder.setDBType(targetNames);
@@ -128,7 +136,7 @@ public class Hexai1139DataTransport {
                     fesuploadFolder = new FmsFolder();
                     fesuploadFolder.setFolderId(IdUtil.nanoId(6));
                     fesuploadFolder.setFolderName(FolderTypeEnum.FES.folderName());
-                    fesuploadFolder.setObjectPath("/"+FolderTypeEnum.FES.folderName());
+                    fesuploadFolder.setObjectPath("/" + FolderTypeEnum.FES.folderName());
                     fesuploadFolder.setAliases(FolderTypeEnum.FES.folderName());
                     fesuploadFolder.setDeleted(false);
                     fesuploadFolder.setCrtUser(userId);
@@ -155,7 +163,7 @@ public class Hexai1139DataTransport {
                     ddsuploadFolder = new FmsFolder();
                     ddsuploadFolder.setFolderId(IdUtil.nanoId(6));
                     ddsuploadFolder.setFolderName(FolderTypeEnum.DDS.folderName());
-                    ddsuploadFolder.setObjectPath("/"+FolderTypeEnum.DDS.folderName());
+                    ddsuploadFolder.setObjectPath("/" + FolderTypeEnum.DDS.folderName());
                     ddsuploadFolder.setAliases(FolderTypeEnum.DDS.folderName());
                     ddsuploadFolder.setDeleted(false);
                     ddsuploadFolder.setCrtUser(userId);
@@ -182,7 +190,7 @@ public class Hexai1139DataTransport {
                     desuploadFolder = new FmsFolder();
                     desuploadFolder.setFolderId(IdUtil.nanoId(6));
                     desuploadFolder.setFolderName(FolderTypeEnum.DES.folderName());
-                    desuploadFolder.setObjectPath("/"+FolderTypeEnum.DES.folderName());
+                    desuploadFolder.setObjectPath("/" + FolderTypeEnum.DES.folderName());
                     desuploadFolder.setAliases(FolderTypeEnum.DES.folderName());
                     desuploadFolder.setDeleted(false);
                     desuploadFolder.setCrtUser(userId);
@@ -357,7 +365,23 @@ public class Hexai1139DataTransport {
                         file.setTenantId(tenantId);
                         file.setOrgId(orgId);
                         file.setCreateTime(hexaiFile.getCreateTime());
-                        file.setFilePathUrl(hexaiFile.getFilePathUrl());
+                        //服务器文件数据迁移
+                        String hexaiPathUrl = hexaiFile.getFilePathUrl();
+                        String suffix="";
+                        if (OcrTypeEnum.DDS.code().equals(file.getBatchType())) {
+                            suffix = hexaiPathUrl.substring(hexaiPathUrl.indexOf(FolderTypeEnum.DDS.folderName()));
+                        } else if (OcrTypeEnum.DES.code().equals(file.getBatchType())) {
+                            suffix = hexaiPathUrl.substring(hexaiPathUrl.indexOf(FolderTypeEnum.DES.folderName()));
+                        } else if (OcrTypeEnum.FES.code().equals(file.getBatchType())) {
+                            suffix = hexaiPathUrl.substring(hexaiPathUrl.indexOf(FolderTypeEnum.FES.folderName()));
+                        }
+                        file.setFilePathUrl(store.getStoreUrl()+ File.separator+suffix);
+                        File copyLocalPathUrl = Paths.get(fileRootDir, suffix).toFile();
+                        if (copyLocalPathUrl.exists()){
+                            File targetPathUrl = Paths.get(file.getFilePathUrl()).toFile();
+                            FileUtil.move(copyLocalPathUrl,targetPathUrl,true);
+                            log.info("文件迁移记录：{}  -->  {}",copyLocalPathUrl.getAbsolutePath(),targetPathUrl.getAbsolutePath());
+                        }
                         Object[] values = new Object[13];
                         values[0] = file.getFileId();
                         values[1] = file.getFolderId();
@@ -380,14 +404,14 @@ public class Hexai1139DataTransport {
                     List<Object[]> extendInfoValueList = new ArrayList<>();
                     List<Map<String, Object>> hexaiExtendInfoMapList = springJdbcTemplate.queryForList(hexaiExtendSelectSql);
                     for (FmsBatch batch : batchList) {
-                        List<HexaiDocextractInfo> hexaiDocextractInfoList=Collections.emptyList();
-                        if (CollectionUtil.isNotEmpty(hexaiExtendInfoMapList)){
-                            hexaiDocextractInfoList=JSON.parseArray(JSON.toJSONString(hexaiExtendInfoMapList),HexaiDocextractInfo.class);
+                        List<HexaiDocextractInfo> hexaiDocextractInfoList = Collections.emptyList();
+                        if (CollectionUtil.isNotEmpty(hexaiExtendInfoMapList)) {
+                            hexaiDocextractInfoList = JSON.parseArray(JSON.toJSONString(hexaiExtendInfoMapList), HexaiDocextractInfo.class);
                         }
                         HexaiDocextractInfo hexaiDocextractInfo = hexaiDocextractInfoList.stream().filter(hdi -> hdi.getBatchId().equals(batch.getBatchType())).findFirst().orElse(null);
                         FmsBatchExtendInfo extendInfo = new FmsBatchExtendInfo();
                         extendInfo.setBatchId(batch.getBatchId());
-                        if (Objects.nonNull(hexaiDocextractInfo)){
+                        if (Objects.nonNull(hexaiDocextractInfo)) {
                             extendInfo.setCtCode(hexaiDocextractInfo.getCtCode());
                             extendInfo.setExtractwords(hexaiDocextractInfo.getExtractwords());
                         }
@@ -397,14 +421,14 @@ public class Hexai1139DataTransport {
                         extendInfo.setRemoveWatermarkSrc(String.valueOf(false));
                         extendInfo.setRemoveStamp(String.valueOf(false));
                         Object[] values = new Object[8];
-                        values[0]=extendInfo.getBatchId();
-                        values[1]=extendInfo.getCtCode();
-                        values[2]=extendInfo.getExtractwords();
-                        values[3]=extendInfo.getOcrStamp();
-                        values[4]=extendInfo.getRemoveWatermarkSrc();
-                        values[5]=extendInfo.getRemoveWatermarkScan();
-                        values[6]=extendInfo.getRemoveStamp();
-                        values[7]=extendInfo.getStartOcrTime();
+                        values[0] = extendInfo.getBatchId();
+                        values[1] = extendInfo.getCtCode();
+                        values[2] = extendInfo.getExtractwords();
+                        values[3] = extendInfo.getOcrStamp();
+                        values[4] = extendInfo.getRemoveWatermarkSrc();
+                        values[5] = extendInfo.getRemoveWatermarkScan();
+                        values[6] = extendInfo.getRemoveStamp();
+                        values[7] = extendInfo.getStartOcrTime();
                         extendInfoValueList.add(values);
                         extendInfoList.add(extendInfo);
                     }
@@ -413,9 +437,9 @@ public class Hexai1139DataTransport {
                     List<Object[]> statisticsValueList = new ArrayList<>();
                     List<Map<String, Object>> hexaiStatisticsMapList = springJdbcTemplate.queryForList(hexaiStatisticsSelectSql);
                     for (FmsBatch batch : batchList) {
-                        List<HexaiStatistics> hexaiStatisticsList=Collections.emptyList();
-                        if (CollectionUtil.isNotEmpty(hexaiStatisticsMapList)){
-                            hexaiStatisticsList=JSON.parseArray(JSON.toJSONString(hexaiStatisticsMapList),HexaiStatistics.class);
+                        List<HexaiStatistics> hexaiStatisticsList = Collections.emptyList();
+                        if (CollectionUtil.isNotEmpty(hexaiStatisticsMapList)) {
+                            hexaiStatisticsList = JSON.parseArray(JSON.toJSONString(hexaiStatisticsMapList), HexaiStatistics.class);
                         }
                         HexaiStatistics hexaiStatistics = hexaiStatisticsList.stream().filter(hdi -> hdi.getBatchId().equals(batch.getBatchType())).findFirst().orElse(null);
                         FmsStatistics statistics = new FmsStatistics();
@@ -429,40 +453,40 @@ public class Hexai1139DataTransport {
                         statistics.setCrtUser(userId);
                         statistics.setTenantId(tenantId);
                         statistics.setOrgId(orgId);
-                        if (Objects.nonNull(hexaiStatistics)){
+                        if (Objects.nonNull(hexaiStatistics)) {
                             statistics.setProcessTime(hexaiStatistics.getProcessTime());
                             statistics.setDocPages(hexaiStatistics.getDocPages());
                             statistics.setCreateTime(hexaiStatistics.getCreateTime());
                             statistics.setEndTime(hexaiStatistics.getEndTime());
                         }
                         Object[] values = new Object[10];
-                        values[0]=statistics.getBatchId();
-                        values[1]=statistics.getProcessTime();
-                        values[2]=statistics.getDocPages();
-                        values[3]=statistics.getCreateTime();
-                        values[4]=statistics.getEndTime();
-                        values[5]=statistics.getStartOcrTime();
-                        values[6]=statistics.getOcrType();
-                        values[7]=statistics.getCrtUser();
-                        values[8]=statistics.getTenantId();
-                        values[9]=statistics.getOrgId();
+                        values[0] = statistics.getBatchId();
+                        values[1] = statistics.getProcessTime();
+                        values[2] = statistics.getDocPages();
+                        values[3] = statistics.getCreateTime();
+                        values[4] = statistics.getEndTime();
+                        values[5] = statistics.getStartOcrTime();
+                        values[6] = statistics.getOcrType();
+                        values[7] = statistics.getCrtUser();
+                        values[8] = statistics.getTenantId();
+                        values[9] = statistics.getOrgId();
                         statisticsValueList.add(values);
                         statisticsList.add(statistics);
                     }
 
 
-                    log.info("当前页码 {} ，开始执行插入",page);
-                    if (CollectionUtil.isNotEmpty(batchValueList)){
-                        jdbcUtilServices.batchInsert(targetNames, "FMS_BATCH", batchInsertSql,batchValueList);
+                    log.info("当前页码 {} ，开始执行插入", page);
+                    if (CollectionUtil.isNotEmpty(batchValueList)) {
+                        jdbcUtilServices.batchInsert(targetNames, "FMS_BATCH", batchInsertSql, batchValueList);
                     }
-                    if (CollectionUtil.isNotEmpty(fileValueList)){
-                        jdbcUtilServices.batchInsert(targetNames, "FMS_FILE", fileInsertSql,fileValueList);
+                    if (CollectionUtil.isNotEmpty(fileValueList)) {
+                        jdbcUtilServices.batchInsert(targetNames, "FMS_FILE", fileInsertSql, fileValueList);
                     }
-                    if (CollectionUtil.isNotEmpty(extendInfoValueList)){
-                        jdbcUtilServices.batchInsert(targetNames, "T_AI_DDS_BATCH_EXTEND_INFO", extendInfoInsertSql,extendInfoValueList);
+                    if (CollectionUtil.isNotEmpty(extendInfoValueList)) {
+                        jdbcUtilServices.batchInsert(targetNames, "T_AI_DDS_BATCH_EXTEND_INFO", extendInfoInsertSql, extendInfoValueList);
                     }
-                    if (CollectionUtil.isNotEmpty(statisticsValueList)){
-                        jdbcUtilServices.batchInsert(targetNames, "T_AI_DDS_STATISTICS", statisticsInsertSql,statisticsValueList);
+                    if (CollectionUtil.isNotEmpty(statisticsValueList)) {
+                        jdbcUtilServices.batchInsert(targetNames, "T_AI_DDS_STATISTICS", statisticsInsertSql, statisticsValueList);
                     }
                 }
             }
