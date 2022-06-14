@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
 @Component
 public class Hexai1139DataTransport {
 
-    @Value("${target.mysql.datasource.names}")
+    @Value("${target.datasource.names}")
     private String targetNames;
 
     private static final Logger log = LoggerFactory.getLogger(Hexai1139DataTransport.class);
@@ -84,7 +84,6 @@ public class Hexai1139DataTransport {
     //t_ai_dds_statistics->t_ai_dds_statistics
     //t_ai_dds_docextract_info->t_ai_dds_batch_extend_info
     private class BatchDataWork implements Runnable {
-        private AtomicInteger ai = new AtomicInteger(0);
 
         //批次数据查询sql
         private String hexaiBatchSelectSql = " SELECT BI.* FROM T_AI_FMS_BATCH BI ";

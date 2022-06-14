@@ -91,7 +91,7 @@ public class DynamicDataSource extends AbstractRoutingDataSource {
      */
     private void initOtherDatasource(Environment env){
         log.info("初始化 数据库中配置的全部数据库连接");
-        String prefix = "target.mysql.datasource";
+        String prefix = "target.datasource";
         String otherDbNames = env.getProperty(prefix+".names");
         if(StringUtils.isEmpty(otherDbNames)){
             log.info("未配置其他数据源");
