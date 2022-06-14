@@ -74,7 +74,7 @@ public class Hexai1139DataTransport {
 
     public void startCopyData() {
         successMap = new ConcurrentHashMap<>();
-//        new Thread(new BatchDataWork()).start();
+        new Thread(new BatchDataWork()).start();
         new Thread(new ContractTemplateDataWork()).start();
     }
 

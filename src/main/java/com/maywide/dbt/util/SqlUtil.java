@@ -33,9 +33,9 @@ public class SqlUtil {
      * @return
      */
     public static String pageSql(String dbProductName,String querySql,Integer startIndex, Integer pageSize){
-        switch (dbProductName){
-            case SqlUtil.ORACLE: return createOraclePageSQL(querySql,startIndex,startIndex+pageSize);
-            case SqlUtil.MYSQL:return createMySQLPageSQL(querySql,startIndex,pageSize);
+        switch (dbProductName.toLowerCase()){
+            case "oracle": return createOraclePageSQL(querySql,startIndex,startIndex+pageSize);
+            case "mysql":return createMySQLPageSQL(querySql,startIndex,pageSize);
             default:return null;
         }
     }
