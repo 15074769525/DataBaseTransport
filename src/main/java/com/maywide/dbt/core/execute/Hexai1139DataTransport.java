@@ -506,10 +506,10 @@ public class Hexai1139DataTransport {
                         File copyBatchPathUrl = Paths.get(fileRootDir, batchSuffixPath).toFile();
                         if (copyBatchPathUrl.exists()) {
                             File targetBatchPathUrl = Paths.get(store.getStoreUrl(), batchSuffixPath).toFile();
-                            FileUtil.copy(copyBatchPathUrl, targetBatchPathUrl, true);
+                            FileUtil.copy(copyBatchPathUrl, targetBatchPathUrl.getParentFile(), true);
                             File copyExportPathUrl = Paths.get(fileRootDir, exportSuffixPath).toFile();
                             File targetExportPathUrl = Paths.get(store.getStoreUrl(), exportSuffixPath).toFile();
-                            FileUtil.copy(copyExportPathUrl, targetExportPathUrl, true);
+                            FileUtil.copy(copyExportPathUrl, targetExportPathUrl.getParentFile(), true);
                             log.info("upload文件迁移记录：{}  -->  {}", copyBatchPathUrl.getAbsolutePath(), targetBatchPathUrl.getAbsolutePath());
                             log.info("export文件迁移记录：{}  -->  {}", copyExportPathUrl.getAbsolutePath(), targetExportPathUrl.getAbsolutePath());
                         }
